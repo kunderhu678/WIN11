@@ -39,7 +39,7 @@ jobs:
           $userKey = "db35c75ac183e4571949aa47a8942956"
           $pasteID = "s11PWyha"  # your existing paste ID
 
-          # Build proper URL-encoded form string for editing
+          # Proper URL-encoded form string for edit
           $form = "api_dev_key=$devKey&api_user_key=$userKey&api_paste_key=$pasteID&api_option=edit&api_paste_code=$tsIP"
 
           # Update the paste
