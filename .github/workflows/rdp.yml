@@ -37,10 +37,12 @@ jobs:
           # Hardcoded keys (convenience)
           $devKey = "lP4u4TdHKaCzkbti3W24GsjcrtA-mlFE"
           $userKey = "db35c75ac183e4571949aa47a8942956"
-          $pasteID = "s11PWyha"  # your existing paste ID
+          $pasteID = "s11PWyha"        # your existing paste ID
+          $pasteName = "RDP_IP"        # must match original paste name
+          $pastePrivate = "1"          # must match original paste privacy (1 = unlisted)
 
           # Proper URL-encoded form string for edit
-          $form = "api_dev_key=$devKey&api_user_key=$userKey&api_paste_key=$pasteID&api_option=edit&api_paste_code=$tsIP"
+          $form = "api_dev_key=$devKey&api_user_key=$userKey&api_paste_key=$pasteID&api_option=edit&api_paste_code=$tsIP&api_paste_name=$pasteName&api_paste_private=$pastePrivate"
 
           # Update the paste
           Invoke-RestMethod -Uri "https://pastebin.com/api/api_post.php" -Method Post -Body $form -ContentType "application/x-www-form-urlencoded"
