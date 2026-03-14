@@ -26,8 +26,8 @@ Install-IfMissing "winfsp" "WinFsp.WinFsp"
 
 # ---------- 2. Configure Mega ----------
 # Replace these with your Mega credentials
-$MegaEmail = "YOUR_EMAIL_HERE"
-$MegaPass  = "YOUR_PASSWORD_HERE"
+$MegaEmail = "janemanbruh@outlook.com"
+$MegaPass  = "M_UniPass123!@"
 $RemoteName = "mega"
 
 # rclone config automation
