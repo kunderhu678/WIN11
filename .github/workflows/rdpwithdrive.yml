@@ -23,23 +23,17 @@ jobs:
 
       - name: Connect Tailscale
         run: |
-          $user = "${{ github.actor }}"
-          $date = (Get-Date).ToString("yyyyMMdd").ToUpper()
-          $hostname = "$user-$date"
           $authKey = "tskey-auth-kimGNQPCkz11CNTRL-3fDxcDxBubijSqRCoUw4cidnqU7haxvY"
-          
-          & "C:\Program Files\Tailscale\tailscale.exe" up --authkey=$authKey --hostname=$hostname --unattended --reset
+          & "C:\Program Files\Tailscale\tailscale.exe" up --authkey=$authKey --hostname="Win11-Cloud" --unattended --reset
 
-      - name: Configure User & Desktop Folder
+      - name: Setup Public Desktop Folder
         run: |
-          # Create the RDP User
-          $Password = ConvertTo-SecureString "MySecurePass123!" -AsPlainText -Force
-          $newUser = New-LocalUser -Name "RDPUser" -Password $Password -FullName "RDP User" -Description "User for RDP"
-          Add-LocalGroupMember -Group "Administrators" -Member "RDPUser"
+          # Use Public Desktop so it shows up for BOTH Administrator and RDPUser
+          $PublicDesktop = "C:\Users\Public\Desktop\InfiniCloud"
+          if (!(Test-Path $PublicDesktop)) { New-Item -ItemType Directory -Path $PublicDesktop -Force }
           
-          # Create the mount folder on the RDPUser's Desktop
-          $CloudPath = "C:\Users\RDPUser\Desktop\InfiniCloud"
-          if (!(Test-Path $CloudPath)) { New-Item -ItemType Directory -Path $CloudPath -Force }
+          # Grant permissions so everyone can write to it
+          icacls "C:\Users\Public\Desktop\InfiniCloud" /grant "Everyone:(OI)(CI)F" /T
 
       - name: Mount InfiniCLOUD (Direct Method)
         shell: pwsh
@@ -49,22 +43,21 @@ jobs:
           $url = "https://otaru.infini-cloud.net/dav/"
           $obscured = rclone obscure $pass
           
-          # Setup cache on D: drive (Large Drive)
+          # Setup cache on D:
           New-Item -ItemType Directory -Force -Path "D:\rcache"
 
-          # Use the Desktop folder path we created
-          $DesktopFolder = "C:\Users\RDPUser\Desktop\InfiniCloud"
+          # Mount to the Public Desktop
+          $MountPath = "C:\Users\Public\Desktop\InfiniCloud"
           
-          # Mount Command
-          Start-Process rclone -ArgumentList "mount :webdav: `"$DesktopFolder`" --webdav-url $url --webdav-user $user --webdav-pass $obscured --vfs-cache-mode full --vfs-cache-max-size 20G --cache-dir D:\rcache" -WindowStyle Hidden
+          Start-Process rclone -ArgumentList "mount :webdav: `"$MountPath`" --webdav-url $url --webdav-user $user --webdav-pass $obscured --vfs-cache-mode full --vfs-cache-max-size 20G --cache-dir D:\rcache" -WindowStyle Hidden
           
-          Start-Sleep -Seconds 15
+          Start-Sleep -Seconds 20
 
       - name: Ready to Connect
         run: |
           $tsIP = & "C:\Program Files\Tailscale\tailscale.exe" ip -4
           echo "=========================================="
           echo "SUCCESS! IP: $tsIP"
-          echo "USER: RDPUser | PASS: MySecurePass123!"
+          echo "The InfiniCloud folder is on the PUBLIC desktop."
           echo "=========================================="
           while($true) { Start-Sleep -Seconds 60 }
