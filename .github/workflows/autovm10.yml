@@ -74,7 +74,7 @@ jobs:
 
           Write-Host "===== DOWNLOADING VDI FILE ====="
 
-          $vdiUrl = "https://archive.org/download/windows-8-startup/Windows%208%20Pro.vdi"
+          $vdiUrl = "https://archive.org/download/windows-8.1_202208/WINDOWS%208.1.vdi"
           $vdiPath = "C:\Users\Public\Windows8Pro.vdi"
 
           Start-Job -ScriptBlock {
@@ -103,7 +103,7 @@ jobs:
           & $vb createvm --name $vmName --basefolder $vmBase --register
           Write-Host "VM created"
 
-          & $vb modifyvm $vmName --memory 2048 --cpus 2 --nic1 nat
+          & $vb modifyvm $vmName --memory 10,240 --cpus 2 --nic1 nat
           Write-Host "VM configured"
 
           & $vb storagectl $vmName --name "SATA Controller" --add sata --controller IntelAhci
