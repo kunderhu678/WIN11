@@ -1,0 +1,72 @@
+name: Win11
+on: workflow_dispatch
+
+jobs:
+  summon-pc:
+    runs-on: windows-latest
+
+    steps:
+      - name: Install Tailscale
+        run: |
+          Invoke-WebRequest https://pkgs.tailscale.com/stable/tailscale-setup-1.82.0-amd64.msi -OutFile tailscale.msi
+          Start-Process msiexec.exe -ArgumentList "/i tailscale.msi /quiet /norestart" -Wait
+
+      - name: Enable Remote Desktop
+        run: |
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
+          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
+
+      - name: Connect Tailscale
+        run: |
+          $user = "${{ github.actor }}"
+          $date = (Get-Date).ToString("yyyyMMdd").ToUpper()
+          $hostname = "$user-$date"
+          $authKey = "tskey-auth-kimGNQPCkz11CNTRL-3fDxcDxBubijSqRCoUw4cidnqU7haxvY"
+          & "C:\Program Files\Tailscale\tailscale.exe" up --authkey=$authKey --hostname=$hostname --unattended --reset
+
+      - name: Configure User
+        run: |
+          $Password = ConvertTo-SecureString "MySecurePass123!" -AsPlainText -Force
+          $newUser = New-LocalUser -Name "RDPUser" -Password $Password -FullName "RDP User" -Description "User for RDP"
+          Add-LocalGroupMember -Group "Administrators" -Member "RDPUser"
+          Add-LocalGroupMember -Group "Remote Desktop Users" -Member "RDPUser"
+
+      - name: Install Rclone and WinFsp
+        run: |
+          choco install rclone winfsp -y
+
+      - name: Mount InfiniCloud for RDPUser
+        run: |
+          # 1. Kill any existing rclone processes
+          taskkill /IM rclone.exe /F /T /ErrorAction SilentlyContinue
+
+          # 2. Define the TARGET path specifically for RDPUser
+          $rdpDesktop = "C:\Users\RDPUser\Desktop\InfiniCloud"
+          
+          # 3. Create the directory manually (it might not exist yet for a new user)
+          if (!(Test-Path $rdpDesktop)) {
+              New-Item -Path $rdpDesktop -ItemType Directory -Force
+          }
+
+          # 4. Handle Credentials
+          $pass = "uwWfVg3HNyQ4NE5s"
+          $env:Path += ";C:\Program Files\rclone"
+          $obscured = rclone obscure $pass
+
+          # 5. Start the Mount pointing to RDPUser's Desktop
+          Start-Process rclone -ArgumentList "mount :webdav: `"$rdpDesktop`" --webdav-url https://otaru.infini-cloud.net/dav/ --webdav-user meownsoor --webdav-pass $obscured --vfs-cache-mode full" -WindowStyle Hidden
+
+          # 6. Wait for the handshake to finalize
+          Start-Sleep -Seconds 10
+
+      - name: Ready to Connect
+        run: |
+          $tsIP = & "C:\Program Files\Tailscale\tailscale.exe" ip -4
+          echo "=========================================="
+          echo "SUCCESS! CONNECT VIA RDP TO THIS IP: $tsIP"
+          echo "USER: RDPUser"
+          echo "PASS: MySecurePass123!"
+          echo "MOUNTED AT: C:\Users\RDPUser\Desktop\InfiniCloud"
+          echo "=========================================="
+          while($true) { Start-Sleep -Seconds 60 }

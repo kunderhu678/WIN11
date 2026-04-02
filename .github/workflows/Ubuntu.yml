@@ -1,0 +1,66 @@
+name: Ubuntu RDP (XFCE + Tailscale)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+
+    steps:
+    - name: Update system
+      run: |
+        sudo apt update && sudo apt upgrade -y
+
+    - name: Install XFCE & XRDP
+      run: |
+        sudo apt install -y xfce4 xfce4-goodies xrdp dbus-x11
+
+    - name: Configure XFCE session
+      run: |
+        echo "xfce4-session" > ~/.xsession
+        echo "startxfce4" > ~/.xsessionrc
+
+    - name: Fix XRDP permissions
+      run: |
+        sudo adduser xrdp ssl-cert
+
+    - name: Configure XRDP startup
+      run: |
+        sudo bash -c 'cat > /etc/xrdp/startwm.sh <<EOF
+        #!/bin/sh
+        export DESKTOP_SESSION=xfce
+        export XDG_SESSION_DESKTOP=xfce
+        exec startxfce4
+        EOF'
+        sudo chmod +x /etc/xrdp/startwm.sh
+
+    - name: Set password for runner
+      run: |
+        echo "runner:123456" | sudo chpasswd
+
+    - name: Start XRDP
+      run: |
+        sudo systemctl enable xrdp
+        sudo systemctl restart xrdp
+
+    - name: Install Tailscale
+      run: |
+        curl -fsSL https://tailscale.com/install.sh | sh
+
+    - name: Start Tailscale
+      run: |
+        sudo tailscale up --authkey=tskey-auth-kimGNQPCkz11CNTRL-3fDxcDxBubijSqRCoUw4cidnqU7haxvY --hostname=github-rdp
+
+    - name: Show connection info
+      run: |
+        echo "====== CONNECT USING RDP ======"
+        echo "Username: runner"
+        echo "Password: 123456"
+        tailscale ip -4
+
+    - name: Keep session alive
+      run: |
+        echo "RDP is ready. Workflow will stay alive..."
+        sleep 21600
