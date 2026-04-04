@@ -42,35 +42,36 @@ jobs:
           $wallpaperPath = "C:\Windows\Web\Wallpaper\custom_wallpaper.jpg"
           Invoke-WebRequest -Uri "https://4kwallpapers.com/images/wallpapers/windows-10-dark-5120x2880-26140.jpg" -OutFile $wallpaperPath
 
-          # 2. Set System-Wide Defaults (for new profiles)
+          # 2. Set System-Wide Defaults
           Set-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize' -Name "AppsUseLightTheme" -Value 0 -ErrorAction SilentlyContinue
           Set-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize' -Name "SystemUsesLightTheme" -Value 0 -ErrorAction SilentlyContinue
 
-          # 3. Apply specifically to RDPUser by loading their registry hive
-          # This ensures it works even if the user hasn't logged in yet
-          $userSid = (Get-LocalUser -Name "RDPUser").Sid.Value
+          # 3. Create RDPUser Profile safely
           $userProfilePath = "C:\Users\RDPUser"
+          if (!(Test-Path $userProfilePath)) {
+              New-Item -Path $userProfilePath -ItemType Directory -Force
+          }
           
-          # Force create the directory if it doesn't exist to find NTUSER.DAT
-          if (!(Test-Path $userProfilePath)) { 
-              mkdir $userProfilePath 
-              # Trigger a profile load or copy from Default
-              Copy-Item "C:\Users\Default\*" -Destination $userProfilePath -Recurse -Force
+          # Copy only the necessary NTUSER.DAT if it doesn't exist, ignoring junctions
+          if (!(Test-Path "$userProfilePath\NTUSER.DAT")) {
+              Copy-Item "C:\Users\Default\NTUSER.DAT" -Destination "$userProfilePath\NTUSER.DAT" -Force
           }
 
+          # 4. Modify Registry Hive
           reg load HKU\RDPUserTemp "$userProfilePath\NTUSER.DAT"
 
-          # Apply Dark Theme to RDPUser
+          # Apply Dark Theme
           $regPath = "HKU\RDPUserTemp\SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize"
           if (!(Test-Path $regPath)) { New-Item -Path $regPath -Force }
           Set-ItemProperty -Path $regPath -Name "AppsUseLightTheme" -Value 0
           Set-ItemProperty -Path $regPath -Name "SystemUsesLightTheme" -Value 0
 
-          # Apply Wallpaper to RDPUser
+          # Apply Wallpaper
           $wallRegPath = "HKU\RDPUserTemp\Control Panel\Desktop"
+          if (!(Test-Path $wallRegPath)) { New-Item -Path $wallRegPath -Force }
           Set-ItemProperty -Path $wallRegPath -Name "Wallpaper" -Value $wallpaperPath
           
-          # Unload the hive to save changes
+          # Force sync and unload
           [GC]::Collect()
           [GC]::WaitForPendingFinalizers()
           reg unload HKU\RDPUserTemp
