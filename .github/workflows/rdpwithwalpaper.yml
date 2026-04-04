@@ -1,0 +1,92 @@
+name: Windows10
+on: workflow_dispatch
+
+jobs:
+  win10:
+    runs-on: windows-2022
+
+    steps:
+      - name: Install Tailscale
+        run: |
+          Invoke-WebRequest https://pkgs.tailscale.com/stable/tailscale-setup-1.82.0-amd64.msi -OutFile tailscale.msi
+          Start-Process msiexec.exe -ArgumentList "/i tailscale.msi /quiet /norestart" -Wait
+
+      - name: Enable Remote Desktop
+        run: |
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
+          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
+
+      - name: Connect Tailscale
+        run: |
+          $user = "${{ github.actor }}"
+          $date = (Get-Date).ToString("yyyyMMdd").ToUpper()
+          $hostname = "$user-$date"
+          $authKey = "tskey-auth-kimGNQPCkz11CNTRL-3fDxcDxBubijSqRCoUw4cidnqU7haxvY"
+
+          & "C:\Program Files\Tailscale\tailscale.exe" up `
+            --authkey=$authKey `
+            --hostname=$hostname `
+            --unattended --reset
+
+      - name: Configure User
+        run: |
+          $Password = ConvertTo-SecureString "MySecurePass123!" -AsPlainText -Force
+          $newUser = New-LocalUser -Name "RDPUser" -Password $Password -FullName "RDP User" -Description "User for RDP"
+          Add-LocalGroupMember -Group "Administrators" -Member "RDPUser"
+          Add-LocalGroupMember -Group "Remote Desktop Users" -Member "RDPUser"
+
+      - name: Set Wallpaper and Dark Theme
+        run: |
+          # 1. Download Wallpaper
+          $wallpaperPath = "C:\Windows\Web\Wallpaper\custom_wallpaper.jpg"
+          Invoke-WebRequest -Uri "https://4kwallpapers.com/images/wallpapers/windows-10-dark-5120x2880-26140.jpg" -OutFile $wallpaperPath
+
+          # 2. Set System-Wide Defaults (for new profiles)
+          Set-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize' -Name "AppsUseLightTheme" -Value 0 -ErrorAction SilentlyContinue
+          Set-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize' -Name "SystemUsesLightTheme" -Value 0 -ErrorAction SilentlyContinue
+
+          # 3. Apply specifically to RDPUser by loading their registry hive
+          # This ensures it works even if the user hasn't logged in yet
+          $userSid = (Get-LocalUser -Name "RDPUser").Sid.Value
+          $userProfilePath = "C:\Users\RDPUser"
+          
+          # Force create the directory if it doesn't exist to find NTUSER.DAT
+          if (!(Test-Path $userProfilePath)) { 
+              mkdir $userProfilePath 
+              # Trigger a profile load or copy from Default
+              Copy-Item "C:\Users\Default\*" -Destination $userProfilePath -Recurse -Force
+          }
+
+          reg load HKU\RDPUserTemp "$userProfilePath\NTUSER.DAT"
+
+          # Apply Dark Theme to RDPUser
+          $regPath = "HKU\RDPUserTemp\SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize"
+          if (!(Test-Path $regPath)) { New-Item -Path $regPath -Force }
+          Set-ItemProperty -Path $regPath -Name "AppsUseLightTheme" -Value 0
+          Set-ItemProperty -Path $regPath -Name "SystemUsesLightTheme" -Value 0
+
+          # Apply Wallpaper to RDPUser
+          $wallRegPath = "HKU\RDPUserTemp\Control Panel\Desktop"
+          Set-ItemProperty -Path $wallRegPath -Name "Wallpaper" -Value $wallpaperPath
+          
+          # Unload the hive to save changes
+          [GC]::Collect()
+          [GC]::WaitForPendingFinalizers()
+          reg unload HKU\RDPUserTemp
+
+      - name: Ready to Connect
+        run: |
+          $tsIP = & "C:\Program Files\Tailscale\tailscale.exe" ip -4
+          $user = "${{ github.actor }}"
+          $date = (Get-Date).ToString("yyyyMMdd").ToUpper()
+          $hostname = "$user-$date"
+
+          echo "=========================================="
+          echo "HOSTNAME: $hostname"
+          echo "SUCCESS! CONNECT TO THIS IP: $tsIP"
+          echo "USERNAME: RDPUser"
+          echo "PASSWORD: MySecurePass123!"
+          echo "=========================================="
+
+          while($true) { Start-Sleep -Seconds 60 }
